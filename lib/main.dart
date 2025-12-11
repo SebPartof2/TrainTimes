@@ -25,13 +25,27 @@ final GoRouter _router = GoRouter(
     ),
     GoRoute(
       path: '/station/:id',
+      redirect: (context, state) {
+        // If no stations are loaded yet, redirect to home
+        if (_globalStations.isEmpty) {
+          return '/';
+        }
+        return null; // Continue to builder
+      },
       builder: (context, state) {
         final stationId = state.pathParameters['id']!;
-        final station = _globalStations.firstWhere(
-          (s) => s.stopId == stationId,
-          orElse: () => _globalStations.first,
-        );
-        return StationDetailPage(station: station);
+        try {
+          final station = _globalStations.firstWhere(
+            (s) => s.stopId == stationId,
+          );
+          return StationDetailPage(station: station);
+        } catch (e) {
+          // If station not found, redirect to home
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            context.go('/');
+          });
+          return const StationsPage();
+        }
       },
     ),
   ],
