@@ -15,7 +15,8 @@ function Show-Help {
     Write-Host "  .\deploy.ps1 install        - Install Flutter dependencies"
     Write-Host "  .\deploy.ps1 dev            - Run development server"
     Write-Host "  .\deploy.ps1 build          - Build Flutter web app"
-    Write-Host "  .\deploy.ps1 deploy         - Build and deploy to Cloudflare Pages"
+    Write-Host "  .\deploy.ps1 deploy         - Build and deploy to GitHub Pages"
+    Write-Host "  .\deploy.ps1 deploy-custom  - Deploy with custom domain (root base-href)"
     Write-Host "  .\deploy.ps1 deploy-worker  - Deploy CORS proxy worker"
     Write-Host "  .\deploy.ps1 deploy-all     - Deploy both worker and app"
     Write-Host "  .\deploy.ps1 clean          - Clean build files"
@@ -38,6 +39,13 @@ function Build-App {
     flutter clean
     flutter pub get
     flutter build web --release --base-href="/$REPO_NAME/"
+
+    # Copy CNAME file to build directory (if exists)
+    if (Test-Path "web\CNAME") {
+        Copy-Item "web\CNAME" "build\web\CNAME"
+        Write-Host "✅ CNAME file copied to build directory" -ForegroundColor Green
+    }
+
     Write-Host "✅ Build complete! Output: build\web" -ForegroundColor Green
 }
 
@@ -76,6 +84,41 @@ function Deploy-All {
     Write-Host "✅ All deployments complete!" -ForegroundColor Green
 }
 
+function Deploy-Custom {
+    Write-Host "Building Flutter web app for custom domain..." -ForegroundColor Yellow
+    flutter clean
+    flutter pub get
+    flutter build web --release --base-href="/"
+
+    # Copy CNAME file to build directory
+    if (Test-Path "web\CNAME") {
+        Copy-Item "web\CNAME" "build\web\CNAME"
+        Write-Host "✅ CNAME file copied" -ForegroundColor Green
+    }
+
+    Write-Host "Deploying to GitHub Pages..." -ForegroundColor Yellow
+
+    $originalLocation = Get-Location
+    Set-Location build\web
+
+    git init
+    git add .
+    git commit -m "Deploy to GitHub Pages with custom domain"
+    git branch -M gh-pages
+    git remote add origin "https://github.com/$GITHUB_USER/$REPO_NAME.git"
+    git push -f origin gh-pages
+
+    Set-Location $originalLocation
+
+    $customDomain = Get-Content "web\CNAME" -ErrorAction SilentlyContinue
+    if ($customDomain) {
+        Write-Host "✅ Deployed to https://$customDomain/" -ForegroundColor Green
+    } else {
+        Write-Host "✅ Deployed!" -ForegroundColor Green
+    }
+    Write-Host "Configure DNS and enable HTTPS in GitHub Pages settings!" -ForegroundColor Cyan
+}
+
 function Clean-Build {
     Write-Host "Cleaning build files..." -ForegroundColor Yellow
     flutter clean
@@ -102,6 +145,7 @@ switch ($Command.ToLower()) {
     "dev" { Start-Dev }
     "build" { Build-App }
     "deploy" { Deploy-App }
+    "deploy-custom" { Deploy-Custom }
     "deploy-worker" { Deploy-Worker }
     "deploy-all" { Deploy-All }
     "clean" { Clean-Build }

@@ -34,6 +34,7 @@ build:
 	flutter clean
 	flutter pub get
 	flutter build web --release --base-href="/$(REPO_NAME)/"
+	@if [ -f web/CNAME ]; then cp web/CNAME build/web/CNAME; echo "✅ CNAME file copied"; fi
 	@echo "✅ Build complete! Output: build/web"
 
 # Deploy to GitHub Pages
