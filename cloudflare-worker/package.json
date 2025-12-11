@@ -1,0 +1,22 @@
+{
+  "name": "train-times-proxy",
+  "version": "1.0.0",
+  "description": "CORS proxy for GTFS data",
+  "main": "worker.js",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev",
+    "tail": "wrangler tail"
+  },
+  "keywords": [
+    "cloudflare",
+    "workers",
+    "gtfs",
+    "cors-proxy"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  }
+}
