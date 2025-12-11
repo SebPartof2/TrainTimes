@@ -16,6 +16,13 @@ class CitiesConfig {
           website: 'https://metra.com',
           timezone: 'America/Chicago',
         ),
+        Agency(
+          id: 'cta',
+          name: 'CTA',
+          gtfsUrl: 'https://www.transitchicago.com/downloads/sch_data/google_transit.zip',
+          website: 'https://transitchicago.com',
+          timezone: 'America/Chicago',
+        ),
       ],
     ),
   ];
