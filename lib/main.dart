@@ -1,15 +1,41 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'config/cities_config.dart';
 import 'models/agency.dart';
 import 'models/city.dart';
 import 'models/gtfs_stop.dart';
 import 'services/gtfs_service.dart';
+import 'widgets/station_detail_page.dart';
 
 // CORS Proxy Configuration
 // Replace this with your deployed Cloudflare Worker URL
 // Example: 'https://train-times-proxy.your-username.workers.dev'
 // Leave as null for local development (will have CORS issues)
 const String? kCorsProxyUrl = 'https://train-times-proxy.sebpartof2.workers.dev';
+
+// Global list to store stations (so we can access them from routes)
+List<GtfsStop> _globalStations = [];
+
+// Router configuration
+final GoRouter _router = GoRouter(
+  routes: [
+    GoRoute(
+      path: '/',
+      builder: (context, state) => const StationsPage(),
+    ),
+    GoRoute(
+      path: '/station/:id',
+      builder: (context, state) {
+        final stationId = state.pathParameters['id']!;
+        final station = _globalStations.firstWhere(
+          (s) => s.stopId == stationId,
+          orElse: () => _globalStations.first,
+        );
+        return StationDetailPage(station: station);
+      },
+    ),
+  ],
+);
 
 void main() {
   runApp(const TrainTimesApp());
@@ -20,13 +46,13 @@ class TrainTimesApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return MaterialApp.router(
       title: 'Train Times',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,
       ),
-      home: const StationsPage(),
+      routerConfig: _router,
     );
   }
 }
@@ -59,6 +85,10 @@ class _StationsPageState extends State<StationsPage> {
         _selectedAgency = _selectedCity!.agencies.first;
       }
     }
+    // Auto-load stations on page open
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadStations();
+    });
   }
 
   Future<void> _loadStations() async {
@@ -79,6 +109,7 @@ class _StationsPageState extends State<StationsPage> {
       setState(() {
         _stops = sortedStations;
         _filteredStops = sortedStations;
+        _globalStations = sortedStations; // Update global list for routing
         _isLoading = false;
       });
     } catch (e) {
@@ -107,52 +138,163 @@ class _StationsPageState extends State<StationsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: const Text('Train Times - GTFS Stations'),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
+              Theme.of(context).colorScheme.secondaryContainer.withOpacity(0.3),
+            ],
+          ),
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              _buildHeader(context),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildSelectors(),
+                      const SizedBox(height: 16),
+                      if (_stops.isNotEmpty) _buildSearchBar(),
+                      const SizedBox(height: 16),
+                      Expanded(child: _buildContent()),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildSelectors(),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: _isLoading ? null : _loadStations,
-              icon: const Icon(Icons.download),
-              label: const Text('Load Stations'),
-            ),
-            const SizedBox(height: 16),
-            if (_stops.isNotEmpty) _buildSearchBar(),
-            const SizedBox(height: 16),
-            Expanded(child: _buildContent()),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24.0),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Theme.of(context).colorScheme.primary,
+            Theme.of(context).colorScheme.secondary,
           ],
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.train,
+                  color: Colors.white,
+                  size: 32,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Train Times',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      'GTFS Station Explorer',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.9),
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (_stops.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    '${_stops.length} stations',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildSelectors() {
     return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(20.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Select City and Agency',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            Row(
+              children: [
+                Icon(
+                  Icons.location_city,
+                  color: Theme.of(context).colorScheme.primary,
+                  size: 24,
+                ),
+                const SizedBox(width: 12),
+                const Text(
+                  'Select City and Agency',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+              ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 20),
             Row(
               children: [
                 Expanded(
                   child: DropdownButtonFormField<City>(
-                    initialValue: _selectedCity,
-                    decoration: const InputDecoration(
+                    value: _selectedCity,
+                    decoration: InputDecoration(
                       labelText: 'City',
-                      border: OutlineInputBorder(),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      filled: true,
+                      fillColor: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+                      prefixIcon: const Icon(Icons.location_on),
                     ),
                     items: CitiesConfig.cities.map((city) {
                       return DropdownMenuItem(
@@ -167,16 +309,22 @@ class _StationsPageState extends State<StationsPage> {
                         _stops = [];
                         _filteredStops = [];
                       });
+                      if (city != null) _loadStations();
                     },
                   ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
                   child: DropdownButtonFormField<Agency>(
-                    initialValue: _selectedAgency,
-                    decoration: const InputDecoration(
+                    value: _selectedAgency,
+                    decoration: InputDecoration(
                       labelText: 'Agency',
-                      border: OutlineInputBorder(),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      filled: true,
+                      fillColor: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+                      prefixIcon: const Icon(Icons.directions_transit),
                     ),
                     items: _selectedCity?.agencies.map((agency) {
                       return DropdownMenuItem(
@@ -190,6 +338,7 @@ class _StationsPageState extends State<StationsPage> {
                         _stops = [];
                         _filteredStops = [];
                       });
+                      if (agency != null) _loadStations();
                     },
                   ),
                 ),
@@ -202,21 +351,36 @@ class _StationsPageState extends State<StationsPage> {
   }
 
   Widget _buildSearchBar() {
-    return TextField(
-      decoration: InputDecoration(
-        labelText: 'Search Stations',
-        prefixIcon: const Icon(Icons.search),
-        border: const OutlineInputBorder(),
-        suffixIcon: _searchQuery.isNotEmpty
-            ? IconButton(
-                icon: const Icon(Icons.clear),
-                onPressed: () {
-                  _filterStops('');
-                },
-              )
-            : null,
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
       ),
-      onChanged: _filterStops,
+      child: TextField(
+        decoration: InputDecoration(
+          labelText: 'Search Stations',
+          hintText: 'Enter station name or code...',
+          prefixIcon: Icon(
+            Icons.search,
+            color: Theme.of(context).colorScheme.primary,
+          ),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide.none,
+          ),
+          filled: true,
+          fillColor: Colors.white,
+          suffixIcon: _searchQuery.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(Icons.clear),
+                  onPressed: () {
+                    _filterStops('');
+                  },
+                )
+              : null,
+        ),
+        onChanged: _filterStops,
+      ),
     );
   }
 
@@ -273,49 +437,130 @@ class _StationsPageState extends State<StationsPage> {
       );
     }
 
-    return Card(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Text(
-              'Stations (${_filteredStops.length}${_searchQuery.isNotEmpty ? ' of ${_stops.length}' : ''})',
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
+          child: Row(
+            children: [
+              Icon(
+                Icons.list,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Stations (${_filteredStops.length}${_searchQuery.isNotEmpty ? ' of ${_stops.length}' : ''})',
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ],
           ),
-          Expanded(
-            child: ListView.separated(
-              itemCount: _filteredStops.length,
-              separatorBuilder: (context, index) => const Divider(height: 1),
-              itemBuilder: (context, index) {
-                final stop = _filteredStops[index];
-                return ListTile(
-                  leading: const CircleAvatar(
-                    child: Icon(Icons.train_outlined),
+        ),
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.only(top: 8),
+            itemCount: _filteredStops.length,
+            itemBuilder: (context, index) {
+              final stop = _filteredStops[index];
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12.0),
+                child: Card(
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
                   ),
-                  title: Text(stop.stopName),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (stop.stopCode != null && stop.stopCode!.isNotEmpty)
-                        Text('Code: ${stop.stopCode}'),
-                      if (stop.stopLat != null && stop.stopLon != null)
-                        Text(
-                          'Location: ${stop.stopLat!.toStringAsFixed(6)}, ${stop.stopLon!.toStringAsFixed(6)}',
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                    ],
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(16),
+                    onTap: () {
+                      context.go('/station/${Uri.encodeComponent(stop.stopId)}');
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 56,
+                            height: 56,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  Theme.of(context).colorScheme.primaryContainer,
+                                  Theme.of(context).colorScheme.secondaryContainer,
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(
+                              Icons.train,
+                              color: Theme.of(context).colorScheme.onPrimaryContainer,
+                              size: 28,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  stop.stopName,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                if (stop.stopCode != null && stop.stopCode!.isNotEmpty)
+                                  Text(
+                                    'Code: ${stop.stopCode}',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: Theme.of(context).colorScheme.secondary,
+                                    ),
+                                  ),
+                                if (stop.stopLat != null && stop.stopLon != null)
+                                  Text(
+                                    '${stop.stopLat!.toStringAsFixed(4)}, ${stop.stopLon!.toStringAsFixed(4)}',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          Column(
+                            children: [
+                              if (stop.wheelchairBoarding == '1')
+                                Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Icon(
+                                    Icons.accessible,
+                                    color: Colors.blue,
+                                    size: 20,
+                                  ),
+                                ),
+                              const SizedBox(height: 8),
+                              Icon(
+                                Icons.arrow_forward_ios,
+                                size: 16,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                  trailing: stop.wheelchairBoarding == '1'
-                      ? const Icon(Icons.accessible, color: Colors.blue)
-                      : null,
-                );
-              },
-            ),
+                ),
+              );
+            },
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
