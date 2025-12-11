@@ -1,3 +1,5 @@
+import 'gtfs_route.dart';
+
 class GtfsStop {
   final String stopId;
   final String stopName;
@@ -10,6 +12,9 @@ class GtfsStop {
   final int? locationType;
   final String? parentStation;
   final String? wheelchairBoarding;
+
+  // Routes that serve this stop (populated after parsing)
+  List<GtfsRoute> routes = [];
 
   GtfsStop({
     required this.stopId,

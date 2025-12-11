@@ -384,18 +384,126 @@ class _StationsPageState extends State<StationsPage> {
     );
   }
 
-  Widget _buildContent() {
-    if (_isLoading) {
-      return const Center(
+  Widget _buildLoadingScreen() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Theme.of(context).colorScheme.primaryContainer,
+            Theme.of(context).colorScheme.secondaryContainer,
+          ],
+        ),
+      ),
+      child: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('Loading stations...'),
+            // Animated train icon
+            TweenAnimationBuilder(
+              tween: Tween<double>(begin: 0, end: 1),
+              duration: const Duration(seconds: 2),
+              builder: (context, value, child) {
+                return Transform.translate(
+                  offset: Offset(value * 20 - 10, 0),
+                  child: Container(
+                    padding: const EdgeInsets.all(32),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        colors: [
+                          Theme.of(context).colorScheme.primary,
+                          Theme.of(context).colorScheme.secondary,
+                        ],
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                          blurRadius: 30,
+                          spreadRadius: 10,
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.train,
+                      size: 64,
+                      color: Colors.white,
+                    ),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 40),
+            // Loading text
+            Text(
+              'Loading Stations',
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            ),
+            const SizedBox(height: 16),
+            // Progress indicator
+            SizedBox(
+              width: 200,
+              child: TweenAnimationBuilder(
+                tween: Tween<double>(begin: 0, end: 1),
+                duration: const Duration(seconds: 2),
+                builder: (context, value, child) {
+                  return LinearProgressIndicator(
+                    value: value,
+                    backgroundColor: Colors.grey[300],
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      Theme.of(context).colorScheme.primary,
+                    ),
+                    minHeight: 8,
+                    borderRadius: BorderRadius.circular(4),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 24),
+            // Subtitle
+            Text(
+              _selectedAgency?.name ?? 'Fetching GTFS data...',
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.grey[600],
+              ),
+            ),
+            const SizedBox(height: 8),
+            // Animated dots
+            TweenAnimationBuilder(
+              tween: Tween<double>(begin: 0, end: 1),
+              duration: const Duration(milliseconds: 1500),
+              builder: (context, value, child) {
+                final dots = (value * 3).floor();
+                return Text(
+                  '.' * (dots + 1),
+                  style: TextStyle(
+                    fontSize: 24,
+                    color: Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                );
+              },
+              onEnd: () {
+                if (mounted && _isLoading) {
+                  setState(() {});
+                }
+              },
+            ),
           ],
         ),
-      );
+      ),
+    );
+  }
+
+  Widget _buildContent() {
+    if (_isLoading) {
+      return _buildLoadingScreen();
     }
 
     if (_errorMessage != null) {
@@ -517,12 +625,25 @@ class _StationsPageState extends State<StationsPage> {
                                       color: Theme.of(context).colorScheme.secondary,
                                     ),
                                   ),
+                                if (stop.routes.isNotEmpty) ...[
+                                  const SizedBox(height: 6),
+                                  Wrap(
+                                    spacing: 4,
+                                    runSpacing: 4,
+                                    children: stop.routes.take(5).map((route) {
+                                      return _buildRouteBadge(context, route);
+                                    }).toList(),
+                                  ),
+                                ],
                                 if (stop.stopLat != null && stop.stopLon != null)
-                                  Text(
-                                    '${stop.stopLat!.toStringAsFixed(4)}, ${stop.stopLon!.toStringAsFixed(4)}',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.grey[600],
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 4.0),
+                                    child: Text(
+                                      '${stop.stopLat!.toStringAsFixed(4)}, ${stop.stopLon!.toStringAsFixed(4)}',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey[600],
+                                      ),
                                     ),
                                   ),
                               ],
@@ -561,6 +682,53 @@ class _StationsPageState extends State<StationsPage> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildRouteBadge(BuildContext context, dynamic route) {
+    // Parse route color (default to blue if not provided)
+    Color backgroundColor = Colors.blue;
+    Color textColor = Colors.white;
+
+    if (route.routeColor != null && route.routeColor!.isNotEmpty) {
+      try {
+        final colorHex = route.routeColor!.replaceAll('#', '');
+        backgroundColor = Color(int.parse('FF$colorHex', radix: 16));
+      } catch (e) {
+        backgroundColor = Colors.blue;
+      }
+    }
+
+    if (route.routeTextColor != null && route.routeTextColor!.isNotEmpty) {
+      try {
+        final colorHex = route.routeTextColor!.replaceAll('#', '');
+        textColor = Color(int.parse('FF$colorHex', radix: 16));
+      } catch (e) {
+        textColor = Colors.white;
+      }
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(6),
+        boxShadow: [
+          BoxShadow(
+            color: backgroundColor.withOpacity(0.3),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Text(
+        route.routeShortName,
+        style: TextStyle(
+          color: textColor,
+          fontSize: 11,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
     );
   }
 }

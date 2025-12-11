@@ -27,6 +27,10 @@ class StationDetailPage extends StatelessWidget {
           children: [
             _buildHeaderCard(context),
             const SizedBox(height: 16),
+            if (station.routes.isNotEmpty) ...[
+              _buildRoutesCard(context),
+              const SizedBox(height: 16),
+            ],
             _buildLocationCard(context),
             const SizedBox(height: 16),
             _buildDetailsCard(context),
@@ -85,6 +89,101 @@ class StationDetailPage extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildRoutesCard(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.route,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Routes Serving This Station',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: station.routes.map((route) {
+                return _buildRouteBadge(context, route);
+              }).toList(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRouteBadge(BuildContext context, dynamic route) {
+    // Parse route color (default to blue if not provided)
+    Color backgroundColor = Colors.blue;
+    Color textColor = Colors.white;
+
+    if (route.routeColor != null && route.routeColor!.isNotEmpty) {
+      try {
+        final colorHex = route.routeColor!.replaceAll('#', '');
+        backgroundColor = Color(int.parse('FF$colorHex', radix: 16));
+      } catch (e) {
+        backgroundColor = Colors.blue;
+      }
+    }
+
+    if (route.routeTextColor != null && route.routeTextColor!.isNotEmpty) {
+      try {
+        final colorHex = route.routeTextColor!.replaceAll('#', '');
+        textColor = Color(int.parse('FF$colorHex', radix: 16));
+      } catch (e) {
+        textColor = Colors.white;
+      }
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.2),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            route.routeShortName,
+            style: TextStyle(
+              color: textColor,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          if (route.routeLongName.isNotEmpty)
+            Text(
+              route.routeLongName,
+              style: TextStyle(
+                color: textColor.withOpacity(0.9),
+                fontSize: 12,
+              ),
+            ),
+        ],
       ),
     );
   }
