@@ -3,11 +3,18 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../models/gtfs_stop.dart';
+import '../models/gtfs_stop_time.dart';
+import '../services/api_service.dart';
 
 class StationDetailPage extends StatelessWidget {
   final GtfsStop station;
+  final ApiService gtfsService;
 
-  const StationDetailPage({super.key, required this.station});
+  const StationDetailPage({
+    super.key,
+    required this.station,
+    required this.gtfsService,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -31,6 +38,8 @@ class StationDetailPage extends StatelessWidget {
               _buildRoutesCard(context),
               const SizedBox(height: 16),
             ],
+            _buildDepartureTimesCard(context),
+            const SizedBox(height: 16),
             _buildLocationCard(context),
             const SizedBox(height: 16),
             _buildDetailsCard(context),
@@ -185,6 +194,184 @@ class StationDetailPage extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+
+  Widget _buildDepartureTimesCard(BuildContext context) {
+    return FutureBuilder<List<GtfsStopTime>>(
+      future: gtfsService.getUpcomingDepartures(station.stopId, limit: 15),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.schedule,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Upcoming Departures',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  const Center(
+                    child: CircularProgressIndicator(),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        final departures = snapshot.data ?? [];
+
+    if (departures.isEmpty) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.schedule,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Upcoming Departures',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Center(
+                child: Text(
+                  'No upcoming departures available',
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.schedule,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'Upcoming Departures',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: departures.length,
+              separatorBuilder: (context, index) => Divider(
+                height: 24,
+                color: Colors.grey[300],
+              ),
+              itemBuilder: (context, index) {
+                final departure = departures[index];
+
+                return Row(
+                  children: [
+                    // Time
+                    Container(
+                      width: 80,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primaryContainer,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        departure.getFormattedTime(),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onPrimaryContainer,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    // Headsign
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (departure.stopHeadsign != null &&
+                              departure.stopHeadsign!.isNotEmpty)
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.arrow_forward,
+                                  size: 14,
+                                  color: Colors.grey[600],
+                                ),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    departure.stopHeadsign!,
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey[800],
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            )
+                          else
+                            Text(
+                              'Departure',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+      },
     );
   }
 

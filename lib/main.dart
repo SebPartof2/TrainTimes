@@ -4,17 +4,18 @@ import 'config/cities_config.dart';
 import 'models/agency.dart';
 import 'models/city.dart';
 import 'models/gtfs_stop.dart';
-import 'services/gtfs_service.dart';
+import 'services/api_service.dart';
 import 'widgets/station_detail_page.dart';
 
-// CORS Proxy Configuration
-// Replace this with your deployed Cloudflare Worker URL
-// Example: 'https://train-times-proxy.your-username.workers.dev'
-// Leave as null for local development (will have CORS issues)
-const String? kCorsProxyUrl = 'https://train-times-proxy.sebpartof2.workers.dev';
+// API Configuration
+// Replace this with your deployed Cloudflare Worker API URL
+const String? kApiBaseUrl = 'https://train-times-api.sebpartof2.workers.dev';
 
 // Global list to store stations (so we can access them from routes)
 List<GtfsStop> _globalStations = [];
+
+// Global service instance (so we can access it from routes)
+final ApiService _globalApiService = ApiService(apiBaseUrl: kApiBaseUrl);
 
 // Router configuration
 final GoRouter _router = GoRouter(
@@ -38,7 +39,10 @@ final GoRouter _router = GoRouter(
           final station = _globalStations.firstWhere(
             (s) => s.stopId == stationId,
           );
-          return StationDetailPage(station: station);
+          return StationDetailPage(
+            station: station,
+            gtfsService: _globalApiService,
+          );
         } catch (e) {
           // If station not found, redirect to home
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -79,7 +83,8 @@ class StationsPage extends StatefulWidget {
 }
 
 class _StationsPageState extends State<StationsPage> {
-  final GtfsService _gtfsService = GtfsService(corsProxyUrl: kCorsProxyUrl);
+  // Use the global service instance to share data
+  final ApiService _apiService = _globalApiService;
 
   City? _selectedCity;
   Agency? _selectedAgency;
@@ -88,6 +93,10 @@ class _StationsPageState extends State<StationsPage> {
   bool _isLoading = false;
   String? _errorMessage;
   String _searchQuery = '';
+  Set<int> _routeTypesToLoad = {}; // Route types to load from GTFS
+  int _loadingProgress = 0;
+  int _loadingTotal = 100;
+  String _loadingStatus = '';
 
   @override
   void initState() {
@@ -97,28 +106,54 @@ class _StationsPageState extends State<StationsPage> {
       _selectedCity = CitiesConfig.cities.first;
       if (_selectedCity!.agencies.isNotEmpty) {
         _selectedAgency = _selectedCity!.agencies.first;
+        // Initialize route types from agency defaults
+        if (_selectedAgency!.defaultRouteTypes != null) {
+          _routeTypesToLoad = Set.from(_selectedAgency!.defaultRouteTypes!);
+        }
       }
     }
-    // Auto-load stations on page open
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadStations();
-    });
+    // No cache loading - data is fetched from API on demand
   }
 
   Future<void> _loadStations() async {
     if (_selectedAgency == null) return;
+
+    // PREVENT loading without route type selection
+    if (_routeTypesToLoad.isEmpty) {
+      setState(() {
+        _errorMessage = 'Please select at least one station type to load';
+      });
+      return;
+    }
 
     setState(() {
       _isLoading = true;
       _errorMessage = null;
       _stops = [];
       _filteredStops = [];
+      _loadingProgress = 0;
+      _loadingTotal = 100;
+      _loadingStatus = 'Starting...';
     });
 
     try {
-      final stops = await _gtfsService.fetchStops(_selectedAgency!);
-      final stations = _gtfsService.filterStations(stops);
-      final sortedStations = _gtfsService.sortStopsByName(stations);
+      // Fetch stations from API
+      final stops = await _apiService.getStations(
+        _selectedAgency!,
+        routeTypeFilter: _routeTypesToLoad.toList(),
+        onProgress: (current, total, status) {
+          // Only call setState if widget is still mounted
+          if (mounted) {
+            setState(() {
+              _loadingProgress = current;
+              _loadingTotal = total;
+              _loadingStatus = status;
+            });
+          }
+        },
+      );
+      final stations = _apiService.filterStations(stops);
+      final sortedStations = _apiService.sortStopsByName(stations);
 
       setState(() {
         _stops = sortedStations;
@@ -137,16 +172,23 @@ class _StationsPageState extends State<StationsPage> {
   void _filterStops(String query) {
     setState(() {
       _searchQuery = query;
-      if (query.isEmpty) {
-        _filteredStops = _stops;
-      } else {
-        _filteredStops = _stops
-            .where((stop) =>
-                stop.stopName.toLowerCase().contains(query.toLowerCase()) ||
-                (stop.stopCode?.toLowerCase().contains(query.toLowerCase()) ?? false))
-            .toList();
-      }
+      _applyFilters();
     });
+  }
+
+  void _applyFilters() {
+    var filtered = _stops;
+
+    // Apply search query filter
+    if (_searchQuery.isNotEmpty) {
+      filtered = filtered
+          .where((stop) =>
+              stop.stopName.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+              (stop.stopCode?.toLowerCase().contains(_searchQuery.toLowerCase()) ?? false))
+          .toList();
+    }
+
+    _filteredStops = filtered;
   }
 
   @override
@@ -175,7 +217,9 @@ class _StationsPageState extends State<StationsPage> {
                     children: [
                       _buildSelectors(),
                       const SizedBox(height: 16),
-                      if (_stops.isNotEmpty) _buildSearchBar(),
+                      if (_stops.isNotEmpty) ...[
+                        _buildSearchBar(),
+                      ],
                       const SizedBox(height: 16),
                       Expanded(child: _buildContent()),
                     ],
@@ -248,7 +292,7 @@ class _StationsPageState extends State<StationsPage> {
                   ],
                 ),
               ),
-              if (_stops.isNotEmpty)
+              if (_stops.isNotEmpty) ...[
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
@@ -263,6 +307,7 @@ class _StationsPageState extends State<StationsPage> {
                     ),
                   ),
                 ),
+              ],
             ],
           ),
         ],
@@ -322,6 +367,12 @@ class _StationsPageState extends State<StationsPage> {
                         _selectedAgency = city?.agencies.first;
                         _stops = [];
                         _filteredStops = [];
+                        // Reset route types to agency defaults
+                        if (_selectedAgency?.defaultRouteTypes != null) {
+                          _routeTypesToLoad = Set.from(_selectedAgency!.defaultRouteTypes!);
+                        } else {
+                          _routeTypesToLoad = {};
+                        }
                       });
                       if (city != null) _loadStations();
                     },
@@ -351,6 +402,12 @@ class _StationsPageState extends State<StationsPage> {
                         _selectedAgency = agency;
                         _stops = [];
                         _filteredStops = [];
+                        // Reset route types to agency defaults
+                        if (agency?.defaultRouteTypes != null) {
+                          _routeTypesToLoad = Set.from(agency!.defaultRouteTypes!);
+                        } else {
+                          _routeTypesToLoad = {};
+                        }
                       });
                       if (agency != null) _loadStations();
                     },
@@ -461,53 +518,51 @@ class _StationsPageState extends State<StationsPage> {
             const SizedBox(height: 16),
             // Progress indicator
             SizedBox(
-              width: 200,
-              child: TweenAnimationBuilder(
-                tween: Tween<double>(begin: 0, end: 1),
-                duration: const Duration(seconds: 2),
-                builder: (context, value, child) {
-                  return LinearProgressIndicator(
-                    value: value,
+              width: 250,
+              child: Column(
+                children: [
+                  LinearProgressIndicator(
+                    value: _loadingTotal > 0 ? _loadingProgress / _loadingTotal : null,
                     backgroundColor: Colors.grey[300],
                     valueColor: AlwaysStoppedAnimation<Color>(
                       Theme.of(context).colorScheme.primary,
                     ),
                     minHeight: 8,
                     borderRadius: BorderRadius.circular(4),
-                  );
-                },
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    _loadingStatus.isNotEmpty ? _loadingStatus : 'Loading...',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[700],
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 24),
-            // Subtitle
+            const SizedBox(height: 16),
+            // Station count
+            if (_loadingProgress > 0)
+              Text(
+                _loadingProgress == _loadingTotal
+                    ? '$_loadingProgress Stations'
+                    : '$_loadingProgress Stations...',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+            const SizedBox(height: 8),
+            // Agency name
             Text(
               _selectedAgency?.name ?? 'Fetching GTFS data...',
               style: TextStyle(
-                fontSize: 16,
+                fontSize: 14,
                 color: Colors.grey[600],
               ),
-            ),
-            const SizedBox(height: 8),
-            // Animated dots
-            TweenAnimationBuilder(
-              tween: Tween<double>(begin: 0, end: 1),
-              duration: const Duration(milliseconds: 1500),
-              builder: (context, value, child) {
-                final dots = (value * 3).floor();
-                return Text(
-                  '.' * (dots + 1),
-                  style: TextStyle(
-                    fontSize: 24,
-                    color: Theme.of(context).colorScheme.primary,
-                    fontWeight: FontWeight.bold,
-                  ),
-                );
-              },
-              onEnd: () {
-                if (mounted && _isLoading) {
-                  setState(() {});
-                }
-              },
             ),
           ],
         ),

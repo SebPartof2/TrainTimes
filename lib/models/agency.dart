@@ -4,6 +4,7 @@ class Agency {
   final String gtfsUrl;
   final String? website;
   final String? timezone;
+  final List<int>? defaultRouteTypes; // Filter which route types to load (null = all)
 
   Agency({
     required this.id,
@@ -11,6 +12,7 @@ class Agency {
     required this.gtfsUrl,
     this.website,
     this.timezone,
+    this.defaultRouteTypes,
   });
 
   Map<String, dynamic> toJson() => {

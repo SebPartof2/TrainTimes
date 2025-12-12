@@ -1,13 +1,21 @@
-name = "train-times-proxy"
+name = "train-times-api"
 main = "worker.js"
 compatibility_date = "2024-01-01"
 
 # Configure the worker
 workers_dev = true
 
+# D1 Database binding
+# After creating the database with `wrangler d1 create train-times-db`,
+# replace <DATABASE_ID> with the actual database ID
+[[d1_databases]]
+binding = "DB"
+database_name = "train-times-db"
+database_id = "<DATABASE_ID>"  # Replace with actual ID after creating DB
+
 # Routes (uncomment and configure when deploying to a custom domain)
 # routes = [
-#   { pattern = "yourdomain.com/api/gtfs-proxy", zone_name = "yourdomain.com" }
+#   { pattern = "yourdomain.com/api/*", zone_name = "yourdomain.com" }
 # ]
 
 # Environment variables (if needed)

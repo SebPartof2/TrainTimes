@@ -15,6 +15,7 @@ class CitiesConfig {
           gtfsUrl: 'https://schedules.metrarail.com/gtfs/schedule.zip',
           website: 'https://metra.com',
           timezone: 'America/Chicago',
+          defaultRouteTypes: [2], // Rail only (no bus stops)
         ),
         Agency(
           id: 'cta',
@@ -22,6 +23,7 @@ class CitiesConfig {
           gtfsUrl: 'https://www.transitchicago.com/downloads/sch_data/google_transit.zip',
           website: 'https://transitchicago.com',
           timezone: 'America/Chicago',
+          defaultRouteTypes: [1], // Subway/Metro only (exclude buses)
         ),
       ],
     ),
