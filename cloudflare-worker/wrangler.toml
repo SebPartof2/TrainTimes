@@ -11,7 +11,7 @@ workers_dev = true
 [[d1_databases]]
 binding = "DB"
 database_name = "train-times-db"
-database_id = "<DATABASE_ID>"  # Replace with actual ID after creating DB
+database_id = "ed647359-2470-4306-a971-73a395785099"  # Replace with actual ID after creating DB
 
 # Routes (uncomment and configure when deploying to a custom domain)
 # routes = [

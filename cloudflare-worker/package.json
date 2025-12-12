@@ -1,8 +1,9 @@
 {
-  "name": "train-times-proxy",
+  "name": "train-times-api",
   "version": "1.0.0",
-  "description": "CORS proxy for GTFS data",
+  "description": "Cloudflare Worker API for Train Times app with D1 database",
   "main": "worker.js",
+  "type": "module",
   "scripts": {
     "deploy": "wrangler deploy",
     "dev": "wrangler dev",
@@ -12,10 +13,14 @@
     "cloudflare",
     "workers",
     "gtfs",
-    "cors-proxy"
+    "d1",
+    "api"
   ],
   "author": "",
   "license": "MIT",
+  "dependencies": {
+    "fflate": "^0.8.2"
+  },
   "devDependencies": {
     "wrangler": "^3.0.0"
   }

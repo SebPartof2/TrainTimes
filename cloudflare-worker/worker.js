@@ -3,6 +3,8 @@
  * Handles GTFS data processing and serves API endpoints for the Flutter app
  */
 
+import { unzip } from 'fflate';
+
 // Agency configurations
 const AGENCIES = {
   metra: {
@@ -151,16 +153,79 @@ async function downloadAndParseGTFS(gtfsUrl) {
     throw new Error(`Failed to download GTFS data: ${response.status}`);
   }
 
-  const zipData = await response.arrayBuffer();
+  const zipData = new Uint8Array(await response.arrayBuffer());
 
-  // Note: You'll need to add a ZIP parsing library
-  // For now, this is a placeholder
-  // Consider using fflate or similar lightweight library
+  // Unzip the GTFS data
+  const files = await new Promise((resolve, reject) => {
+    unzip(zipData, (err, unzipped) => {
+      if (err) reject(err);
+      else resolve(unzipped);
+    });
+  });
 
-  throw new Error('GTFS parsing not fully implemented yet - needs ZIP library');
+  // Parse required CSV files
+  const stops = parseCSV(new TextDecoder().decode(files['stops.txt']));
+  const routes = parseCSV(new TextDecoder().decode(files['routes.txt']));
+  const trips = parseCSV(new TextDecoder().decode(files['trips.txt']));
+  const stopTimes = parseCSV(new TextDecoder().decode(files['stop_times.txt']));
 
-  // TODO: Parse ZIP and extract stops.txt, routes.txt, trips.txt, stop_times.txt
-  // Return parsed data structure
+  return {
+    stops,
+    routes,
+    trips,
+    stopTimes,
+  };
+}
+
+/**
+ * Parse CSV data into array of objects
+ */
+function parseCSV(csvText) {
+  const lines = csvText.split('\n').filter(line => line.trim());
+  if (lines.length === 0) return [];
+
+  const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+  const rows = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i];
+    const values = parseCSVLine(line);
+
+    if (values.length === headers.length) {
+      const row = {};
+      headers.forEach((header, index) => {
+        row[header] = values[index];
+      });
+      rows.push(row);
+    }
+  }
+
+  return rows;
+}
+
+/**
+ * Parse a single CSV line, handling quoted fields
+ */
+function parseCSVLine(line) {
+  const values = [];
+  let current = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+
+    if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === ',' && !inQuotes) {
+      values.push(current.trim());
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+
+  values.push(current.trim());
+  return values;
 }
 
 /**
